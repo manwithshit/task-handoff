@@ -1,5 +1,7 @@
 ---
 task: <slug>
+executor: <qwen | codex | gemini | ...>
+dispatched: <YYYY-MM-DD>
 type: deterministic
 scope:
   - <path-1>
@@ -26,5 +28,5 @@ status: pending
 <怎么自测：命令 / 步骤 / 预期结果>
 
 ## 产出要求
-完成后在本任务目录下创建 `DONE.md`（模板见 assets/templates/DONE.md），status 只能三选一：
+完成后在本文件夹创建 `DONE.md`（模板见 assets/templates/DONE.md），status 只能三选一：
 `success` | `partial` | `failed`。

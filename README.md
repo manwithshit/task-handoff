@@ -1,62 +1,69 @@
 # task-handoff
 
-A [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) for handing off a single task between two agents that don't talk to each other — a **planning agent** (e.g. Claude Code, doing the thinking) and a separate **execution agent** (a different model, tool, or session, doing the work) — sharing the same project directory.
+A [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) for a **dual-brain workflow**: one agent plans (e.g. Claude Code), a *different* model executes (Qwen, Codex, Gemini…), and they hand a task off through files — never talking directly.
 
-No live conversation between the two agents. No message bus. Just two files: `PROMPT.md` in, `DONE.md` out.
+You finish planning and just say *"hand this to Qwen"*. The skill then:
+
+1. Creates a task folder under the executor's name,
+2. Writes a scoped `PROMPT.md` constraining exactly what that model may do,
+3. Prints a **ready-to-paste launch prompt** you forward to the executor.
+
+Next morning you say *"review yesterday's Qwen tasks"* and it scans that executor's folders, reads each `DONE.md`, and reports back in one pass.
 
 ## Why
 
-If you run a "dual-brain" setup — one agent plans and reviews, another (possibly cheaper/different) agent executes — you need the handoff to be reliable without the two agents ever talking directly:
+If you run a planner/executor split — one agent thinks, another (often cheaper/different) does the work — the handoff has to be reliable without the two agents ever talking:
 
-- The execution agent must **understand the task without extra back-and-forth**.
-- It must **stay inside its lane** — not touch files outside the assigned scope.
-- The planning agent (or a human) must be able to **verify completion by reading one file**, without re-reading the whole session.
+- The executor must **understand the task with no back-and-forth**.
+- It must **stay in its lane** — never touch files outside the assigned scope.
+- You must be able to **review a whole batch by executor**, not chase down individual task names.
 
-`task-handoff` is a lightweight convention + skill instructions for exactly this. It is deliberately *not* a full orchestration framework (no CLI, no Stage/Task numbering, no message bus) — if you need that, look at heavier tools like [GitHub Spec-Kit](https://github.com/github/spec-kit) (single-agent spec→plan→tasks→implement pipeline) or [Agentic Project Management](https://github.com/sdi2200262/agentic-project-management) (multi-agent orchestration with git worktree isolation). This skill covers the much narrower case: **one task, two known agents, file-driven handoff.**
+`task-handoff` is a lightweight convention + skill instructions for exactly this. It is deliberately *not* a full orchestration framework (no CLI, no message bus, no Stage/Task numbering). If you need that, look at [GitHub Spec-Kit](https://github.com/github/spec-kit) (single-agent spec→plan→tasks→implement) or [Agentic Project Management](https://github.com/sdi2200262/agentic-project-management) (multi-agent orchestration with git-worktree isolation). This skill covers the narrow case: **one task, a known executor model, file-driven handoff.**
 
-## How it works
+## Folder layout
 
 ```
-<project-root>/tasks/<slug>/PROMPT.md   ← planning agent writes this
-<project-root>/tasks/<slug>/DONE.md     ← execution agent writes this
+<project-root>/handoffs/<executor>/<YYMMDD>_<slug>/
+    PROMPT.md   ← planner writes this (the constraint)
+    DONE.md     ← executor writes this (the result)
 ```
 
-**Dispatch (planning agent):**
-1. Classify the task — `deterministic` (path is clear, just dispatch) or `exploratory` (not sure it's feasible, run a minimal demo first).
-2. Fill in `PROMPT.md`: goal, definition of done, scope (allowed paths only), self-contained background (no "see the design doc" references — the execution agent can't read your other files), how to verify, and the requirement to write back `DONE.md`.
-3. Hand the task directory to the execution agent.
+Grouping by `<executor>` + date is what makes *"review yesterday's Qwen tasks"* a one-line scan.
 
-**Report (execution agent):**
-1. Fill in `DONE.md`: what changed (file-level summary), how to verify (reproducible steps + actual results), and a conclusion with `status: success | partial | failed`.
-2. Exploratory tasks report "can it be done + what are the gotchas + recommendation" instead of a full implementation.
+## Flow
 
-**Review (planning agent / human):**
-1. Read `DONE.md`'s `status` field.
-2. Cross-check "how to verify" against the original "how to verify" in `PROMPT.md` — a vague or mismatched write-up should be treated as `partial`, not accepted at face value.
-3. On `partial`/`failed`, open a new `PROMPT.md` with only the delta to fix — don't copy the whole original prompt.
+**Dispatch** — you say *"hand this to Qwen"*:
+1. Classify the task — `deterministic` (path is clear) or `exploratory` (feasibility unknown, run a minimal demo first).
+2. Auto-create `handoffs/qwen/<YYMMDD>_<slug>/` and write `PROMPT.md`: goal, definition of done, scope (allowed paths only), **self-contained** background (no "see the design doc" — the executor can't read your other files), how to verify, and the requirement to write `DONE.md`.
+3. Print a launch prompt you paste to the executor — it contains the absolute path to the folder and the scope rule.
+
+**Execute** — a separate model reads `PROMPT.md`, works only inside `scope`, writes `DONE.md`: what changed, how to verify (reproducible steps + actual results), and `status: success | partial | failed`.
+
+**Review** — you say *"review yesterday's Qwen tasks"*:
+1. Scan `handoffs/qwen/` for the matching date.
+2. Read each `DONE.md`; cross-check its "how to verify" against the original in `PROMPT.md`.
+3. Get a single summary: which succeeded, which are partial/failed (and why), which never reported back. A vague or mismatched write-up is treated as `partial`, not accepted at face value.
 
 ## Hard rules the skill enforces
 
 - **No verification, no dispatch.** A task without "definition of done" + "how to verify" doesn't go out.
-- **Scope isolation.** The execution agent only touches paths listed in `PROMPT.md`'s `scope` field.
-- **Self-contained prompts.** Background the execution agent needs is embedded directly in `PROMPT.md`, never referenced by path to another document.
+- **Scope isolation.** The executor only touches paths listed in `PROMPT.md`'s `scope`.
+- **Self-contained prompts.** Background the executor needs is embedded in `PROMPT.md`, never referenced by path to another doc it can't read.
 - **Shared root, no copy-paste context.** Both agents operate on the same project directory; the task files are the only channel.
-- **Fixed fields.** Both `PROMPT.md` and `DONE.md` follow a fixed structure — easy for a machine to parse, easy for a human to skim.
+- **Fixed fields.** Both files follow a fixed structure — easy for a machine to parse, easy for a human to skim.
 
 ## Install
-
-Copy (or symlink) this directory into your Claude Code skills folder:
 
 ```bash
 git clone https://github.com/manwithshit/task-handoff.git ~/.claude/skills/task-handoff
 ```
 
-Or drop it into a project-local `.claude/skills/task-handoff/` if you only want it scoped to one repo.
+Or drop it into a project-local `.claude/skills/task-handoff/` to scope it to one repo.
 
 ## Files
 
 - [`SKILL.md`](SKILL.md) — the skill instructions Claude reads
-- [`assets/templates/PROMPT.md`](assets/templates/PROMPT.md) — dispatch template
+- [`assets/templates/PROMPT.md`](assets/templates/PROMPT.md) — dispatch/constraint template
 - [`assets/templates/DONE.md`](assets/templates/DONE.md) — report-back template
 
 ## License
