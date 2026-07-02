@@ -15,6 +15,7 @@ description: When the user finishes planning and says to hand a task off to anot
    ```
    <project-root>/handoffs/<executor>/<YYMMDD>_<slug>/
    ```
+   - `<project-root>`：**运行时解析当前项目根**，不要写死任何固定路径。取当前工作目录所在的 git 仓库根（`git rev-parse --show-toplevel`）；不在 git 仓库内则退回当前工作目录。执行侧与规划侧共享的就是这个根，`handoffs/` 是它下面的子目录。
    - `<executor>`：从话里提取（"千问"→`qwen`，"codex"→`codex`）
    - `<YYMMDD>`：今天日期
    - `<slug>`：简短 kebab-case 任务名

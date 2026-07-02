@@ -28,6 +28,8 @@ If you run a planner/executor split — one agent thinks, another (often cheaper
     DONE.md     ← executor writes this (the result)
 ```
 
+`<project-root>` is **resolved at runtime** — the git root of the current working directory (`git rev-parse --show-toplevel`), falling back to the cwd if not in a repo. It's never a hardcoded path; `handoffs/` is always a subfolder of whatever project you're currently in, which is the same directory the executor shares.
+
 Grouping by `<executor>` + date is what makes *"review yesterday's Qwen tasks"* a one-line scan.
 
 ## Flow
